@@ -277,6 +277,42 @@
       }
     #endif
 
+    #if !os(macOS)
+      @MainActor
+      func testBindableObservation() async throws {
+        struct FeatureView: View {
+          @Perception.Bindable var model: Model
+          var onRender: @MainActor (FeatureView) -> Void
+          var body: some View {
+            WithPerceptionTracking {
+              let _ = onRender(self)
+              Text(model.text)
+            }
+          }
+        }
+
+        var texts: [String] = []
+        let view = FeatureView(model: Model()) {
+          texts.append($0.model.text)
+        }
+        let renderer = ImageRenderer(content: view)
+        _ = renderer.cgImage
+        let task = Task { @MainActor in
+          for await () in renderer.objectWillChange.values {
+            _ = renderer.cgImage
+          }
+        }
+        try await Task.sleep(for: .seconds(0.1))
+        view.model.count += 1
+        try await Task.sleep(for: .seconds(0.1))
+        view.model.text = "Hi"
+        try await Task.sleep(for: .seconds(0.1))
+        task.cancel()
+        try await Task.sleep(for: .seconds(0.1))
+        XCTAssertEqual(texts, ["", "Hi"])
+      }
+    #endif
+
     @MainActor
     func testActionClosure() async throws {
       struct FeatureView: View {
