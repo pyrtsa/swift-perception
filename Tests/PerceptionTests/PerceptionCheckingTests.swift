@@ -282,34 +282,104 @@
       func testBindableObservation() async throws {
         struct FeatureView: View {
           @Perception.Bindable var model: Model
-          var onRender: @MainActor (FeatureView) -> Void
+          var onRender: @MainActor () -> Void
           var body: some View {
             WithPerceptionTracking {
-              let _ = onRender(self)
+              let _ = onRender()
               Text(model.text)
             }
           }
         }
 
-        var texts: [String] = []
+        var currentRenderPass = 0
+        var renderPasses: [Int] = []
         let view = FeatureView(model: Model()) {
-          texts.append($0.model.text)
+          renderPasses.append(currentRenderPass)
         }
+
         let renderer = ImageRenderer(content: view)
-        _ = renderer.cgImage
-        let task = Task { @MainActor in
-          for await () in renderer.objectWillChange.values {
-            _ = renderer.cgImage
+        func render() async {
+          await Task.yield()
+          _ = renderer.cgImage
+          currentRenderPass += 1
+        }
+        await render()
+
+        view.model.text = "H"
+        await render()
+
+        view.model.text = "H"
+        await render()
+
+        view.model.count += 1
+        await render()
+
+        view.model.text = "Hi"
+        await render()
+
+        XCTAssertEqual(renderPasses, [0, 1, 4])
+      }
+    #endif
+
+    #if !os(macOS)
+      @MainActor
+      func testBindableTransaction() async throws {
+        struct FeatureView: UIViewRepresentable {
+          @Perception.Bindable var model: Model
+          var onRender: @MainActor (Transaction) -> Void
+          @State private var id = 0
+
+          func makeUIView(context: Context) -> UILabel {
+            UILabel()
+          }
+
+          func updateUIView(_ label: UILabel, context: Context) {
+            withPerceptionTracking {
+              _ = id
+              onRender(context.transaction)
+              label.text = model.text
+            } onChange: { [_id] in
+              _id.wrappedValue &+= 1
+            }
           }
         }
-        try await Task.sleep(for: .seconds(0.1))
+
+        var currentRenderPass = 0
+        var renderPasses: [(pass: Int, animated: Bool)] = []
+        let view = FeatureView(model: Model()) { transaction in
+          renderPasses.append((pass: currentRenderPass, animated: transaction.animation != nil))
+        }
+
+        let renderer = ImageRenderer(content: view)
+        func render() async {
+          await Task.yield()
+          _ = renderer.cgImage
+          currentRenderPass += 1
+        }
+        await render()
+
+        view.model.text = "H"
+        await render()
+
+        view.model.text = "H"
+        await render()
+
         view.model.count += 1
-        try await Task.sleep(for: .seconds(0.1))
-        view.model.text = "Hi"
-        try await Task.sleep(for: .seconds(0.1))
-        task.cancel()
-        try await Task.sleep(for: .seconds(0.1))
-        XCTAssertEqual(texts, ["", "Hi"])
+        await render()
+
+        withAnimation {
+          view.model.text = "Hi"
+        }
+        await render()
+
+        view.$model.text.animation().wrappedValue = "Hi"
+        await render()
+
+        view.$model.text.animation().wrappedValue = "Hi!"
+        await render()
+
+        XCTAssertEqual(renderPasses.map(\.pass), [0, 1, 4, 6])
+        XCTAssertEqual(renderPasses.map(\.animated), [false, false, true, true])
       }
     #endif
 
