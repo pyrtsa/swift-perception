@@ -124,26 +124,26 @@
     }
   }
 
-//  extension WithPerceptionTracking: DynamicProperty where Content == Void {
-//    public init() {
-//      self.init(content: ())
-//    }
-//
-//    @MainActor
-//    public func callAsFunction<R>(_ content: () -> R) -> R {
-//      if #available(iOS 17, macOS 14, tvOS 17, watchOS 10, *) {
-//        return _PerceptionLocals.$skipPerceptionChecking.withValue(true) {
-//          content()
-//        }
-//      }
-//      return withPerceptionTracking {
-//        _ = id
-//        return _PerceptionLocals.$skipPerceptionChecking.withValue(true, operation: content)
-//      } onChange: { [_id] in
-//        _id.wrappedValue &+= 1
-//      }
-//    }
-//  }
+  extension WithPerceptionTracking: DynamicProperty where Content == Void {
+    public init() {
+      self.init(content: ())
+    }
+
+    //public func callAsFunction<R>(_ content: () -> R) -> R {
+    public func callAsFunction(_ content: () -> Void) {
+      if #available(iOS 17, macOS 14, tvOS 17, watchOS 10, *) {
+        return _PerceptionLocals.$skipPerceptionChecking.withValue(true) {
+          content()
+        }
+      }
+      return withPerceptionTracking {
+        _ = id
+        return _PerceptionLocals.$skipPerceptionChecking.withValue(true, operation: content)
+      } onChange: { [_id] in
+        _id.wrappedValue &+= 1
+      }
+    }
+  }
 
   @available(iOS 15, macOS 12, tvOS 15, watchOS 8, *)
   extension WithPerceptionTracking: AccessibilityRotorContent

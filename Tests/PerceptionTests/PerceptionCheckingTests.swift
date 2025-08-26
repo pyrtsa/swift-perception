@@ -327,7 +327,7 @@
         struct FeatureView: UIViewRepresentable {
           @Perception.Bindable var model: Model
           var onRender: @MainActor (Transaction) -> Void
-          @State private var id = 0
+          private let withPerceptionTracking = WithPerceptionTracking()
 
           func makeUIView(context: Context) -> UILabel {
             UILabel()
@@ -335,11 +335,8 @@
 
           func updateUIView(_ label: UILabel, context: Context) {
             withPerceptionTracking {
-              _ = id
               onRender(context.transaction)
               label.text = model.text
-            } onChange: { [_id] in
-              _id.wrappedValue &+= 1
             }
           }
         }
