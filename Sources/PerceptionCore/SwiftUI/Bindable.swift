@@ -33,13 +33,8 @@
   @dynamicMemberLookup
   @propertyWrapper
   public struct Bindable<Value> {
-    @ObservedObject fileprivate var observer: Observer<Value>
-
     /// The wrapped object.
-    public var wrappedValue: Value {
-      get { observer.object }
-      set { observer.object = newValue }
-    }
+    public var wrappedValue: Value
 
     /// The bindable wrapper for the object that creates bindings to its properties using dynamic
     /// member lookup.
@@ -48,35 +43,67 @@
     }
 
     /// Returns a binding to the value of a given key path.
-    public subscript<Subject>(
-      dynamicMember keyPath: ReferenceWritableKeyPath<Value, Subject>
-    ) -> Binding<Subject> where Value: AnyObject {
+    public subscript<T>(
+      dynamicMember keyPath: ReferenceWritableKeyPath<Value, T>
+    ) -> Binding<T> where Value: AnyObject & Perceptible {
       #if DEBUG && canImport(SwiftUI)
-        func open<V: Perceptible>(_: V.Type) -> Binding<Subject> {
-          ($observer as! ObservedObject<Observer<V>>.Wrapper).object[
-            isPerceptionTracking: _PerceptionLocals.isInPerceptionTracking,
-            keyPath: unsafeDowncast(keyPath, to: ReferenceWritableKeyPath<V, Subject>.self)
-          ]
-        }
-        guard let valueType = Value.self as? any Perceptible.Type else { fatalError() }
-        return open(valueType)
-      #else
-        $observer.object[dynamicMember: keyPath]
+        let isInPerceptionTracking = _PerceptionLocals.isInPerceptionTracking
       #endif
+      if #available(iOS 17, macOS 14, tvOS 17, watchOS 10, *),
+         !isObservationBeta,
+         let subject = wrappedValue as? any (AnyObject & Observable)
+      {
+        func open<S: AnyObject & Observable>(_ subject: S) -> Binding<T> {
+          @SwiftUI.Bindable var subject = subject
+          let keyPath = unsafeDowncast(keyPath, to: ReferenceWritableKeyPath<S, T>.self)
+          #if DEBUG && canImport(SwiftUI)
+            return $subject[dynamicMember: \.[isPerceptionTracking: isInPerceptionTracking, keyPath: keyPath]]
+          #else
+            return $subject[dynamicMember: keyPath]
+          #endif
+        }
+        return open(subject)
+      } else {
+        return Binding {
+          #if DEBUG && canImport(SwiftUI)
+            wrappedValue[isPerceptionTracking: isInPerceptionTracking, keyPath: keyPath]
+          #else
+            wrappedValue[keyPath: keyPath]
+          #endif
+        } set: { newValue, transaction in
+          withTransaction(transaction) {
+            wrappedValue[keyPath: keyPath] = newValue
+          }
+        }
+      }
     }
 
-    /// Creates a bindable object from an observable object.
-    public init(wrappedValue: Value) where Value: AnyObject & Perceptible {
-      self.observer = Observer(wrappedValue)
+    @available(*, unavailable, message: "The wrapped value must be an object that conforms to Perceptible")
+    public init(wrappedValue: Value) {
+      fatalError()
     }
 
-    /// Creates a bindable object from an observable object.
-    public init(_ wrappedValue: Value) where Value: AnyObject & Perceptible {
-      self.init(wrappedValue: wrappedValue)
+    @available(*, unavailable, message: "The wrapped value must be an object that conforms to Perceptible")
+    public init(projectedValue: Bindable<Value>) {
+      fatalError()
     }
+  }
 
-    /// Creates a bindable from the value of another bindable.
-    public init(projectedValue: Bindable<Value>) where Value: AnyObject & Perceptible {
+  extension Bindable where Value: ObservableObject {
+    @available(*, unavailable, message: "@Bindable only works with Perceptible types. For ObservableObject types, use @ObservedObject instead.")
+    public init(wrappedValue: Value) {
+      fatalError()
+    }
+  }
+
+  extension Bindable where Value: AnyObject, Value: Perceptible {
+    public init(wrappedValue: Value) {
+      self.wrappedValue = wrappedValue
+    }
+    public init(_ wrappedValue: Value) {
+      self.wrappedValue = wrappedValue
+    }
+    public init(projectedValue: Bindable<Value>) {
       self = projectedValue
     }
   }
@@ -105,6 +132,23 @@
   }
 
   #if DEBUG
+    @available(iOS 17, macOS 14, tvOS 17, watchOS 10, *)
+    extension Observable where Self: AnyObject {
+      fileprivate subscript<Member>(
+        isPerceptionTracking isPerceptionTracking: Bool,
+        keyPath keyPath: ReferenceWritableKeyPath<Self, Member>
+      ) -> Member {
+        get {
+          _PerceptionLocals.$isInPerceptionTracking.withValue(isPerceptionTracking) {
+            self[keyPath: keyPath]
+          }
+        }
+        set {
+          self[keyPath: keyPath] = newValue
+        }
+      }
+    }
+
     extension Perceptible {
       fileprivate subscript<Member>(
         isPerceptionTracking isPerceptionTracking: Bool,

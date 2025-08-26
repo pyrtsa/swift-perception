@@ -1,4 +1,5 @@
 {
+  "originHash" : "d55d949d2aefd2d59d0f3721236508a7816f6ba2ee429dfd9f40b619a473c831",
   "pins" : [
     {
       "identity" : "swift-custom-dump",
@@ -59,10 +60,10 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
       "state" : {
-        "revision" : "23e3442166b5122f73f9e3e622cd1e4bafeab3b7",
-        "version" : "1.6.0"
+        "revision" : "b2ed9eabefe56202ee4939dd9fc46b6241c88317",
+        "version" : "1.6.1"
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }
