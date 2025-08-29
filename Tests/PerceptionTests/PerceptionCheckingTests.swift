@@ -323,6 +323,57 @@
 
     #if !os(macOS)
       @MainActor
+      func testBindableObservation_Sheet() async throws {
+        struct FeatureView: View {
+          @Perception.Bindable var model: Model
+          var onParentRender: @MainActor () -> Void
+          var onChildRender: @MainActor () -> Void
+          var body: some View {
+            WithPerceptionTracking {
+              let _ = onParentRender()
+              Text(model.text)
+                .sheet(item: $model.child) { child in
+                  WithPerceptionTracking {
+                    let _ = onChildRender()
+                    Text(child.count.description)
+                  }
+                }
+            }
+          }
+        }
+
+        var currentRenderPass = 0
+        var parentRenderPasses: [Int] = []
+        var childRenderPasses: [Int] = []
+        let view = FeatureView(model: Model(child: Model())) {
+          parentRenderPasses.append(currentRenderPass)
+        } onChildRender: {
+          childRenderPasses.append(currentRenderPass)
+        }
+
+        let renderer = ImageRenderer(content: view)
+        renderer.proposedSize = .zero
+        @MainActor func render(_ testCase: XCTestCase) async {
+          try! await Task.sleep(for: .seconds(0.1))
+          let image = renderer.cgImage!
+          let attachment = XCTAttachment(image: UIImage(cgImage: image))
+          attachment.lifetime = .keepAlways
+          testCase.add(attachment)
+          currentRenderPass += 1
+        }
+        await render(self)
+
+        view.model.text = "Hi!"
+        await render(self)
+
+        XCTAssertEqual(parentRenderPasses, [0, 1])
+        XCTAssertEqual(childRenderPasses, [0])
+      }
+    #endif
+
+
+    #if !os(macOS)
+      @MainActor
       func testBindableTransaction() async throws {
         struct FeatureView: UIViewRepresentable {
           @Perception.Bindable var model: Model
