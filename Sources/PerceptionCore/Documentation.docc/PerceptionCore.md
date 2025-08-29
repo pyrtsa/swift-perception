@@ -5,6 +5,8 @@ you `import Perception`.
 
 ## Overview
 
+See also [`Perception`](<doc:/Perception>), which is the module you'd usually import.
+
 The Perception library back-ports `@Observable`, `withObservationTracking`, and `Observations` all
 the way back to iOS 13, macOS 10.15, tvOS 13 and watchOS 6. This means you can take advantage of
 all of Swift's observation tools today, even if you can't drop support for older Apple platforms.
